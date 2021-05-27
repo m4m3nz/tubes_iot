@@ -1,0 +1,74 @@
+var db = 'mqtt_test3'
+
+var rp = 'autogen'
+
+var measurement = 'Solar'
+
+var groupBy = []
+
+var whereFilter = lambda: ("host" == 'Sensor_1') AND isPresent("Voltage")
+
+var name = 'Voltage Info'
+
+var idVar = name
+
+var message = '{{.Time}} 
+{{.ID}}
+{{.Level}} Voltage = {{ index .Fields "value" }}'
+
+var idTag = 'alertID'
+
+var levelTag = 'level'
+
+var messageField = 'message'
+
+var durationField = 'duration'
+
+var outputDB = 'chronograf'
+
+var outputRP = 'autogen'
+
+var outputMeasurement = 'alerts'
+
+var triggerType = 'threshold'
+
+var warn = 3
+
+var data = stream
+    |from()
+        .database(db)
+        .retentionPolicy(rp)
+        .measurement(measurement)
+        .groupBy(groupBy)
+        .where(whereFilter)
+    |eval(lambda: "Voltage")
+        .as('value')
+
+var trigger = data
+    |alert()
+        .warn(lambda: "value" > warn)
+        .message(message)
+        .id(idVar)
+        .idTag(idTag)
+        .levelTag(levelTag)
+        .messageField(messageField)
+        .durationField(durationField)
+        .stateChangesOnly()
+        .noRecoveries()
+        .slack()
+        .channel('#monitoring')
+
+trigger
+    |eval(lambda: float("value"))
+        .as('value')
+        .keep()
+    |influxDBOut()
+        .create()
+        .database(outputDB)
+        .retentionPolicy(outputRP)
+        .measurement(outputMeasurement)
+        .tag('alertName', name)
+        .tag('triggerType', triggerType)
+
+trigger
+    |httpOut('output')
